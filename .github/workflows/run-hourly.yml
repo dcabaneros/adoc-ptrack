@@ -28,9 +28,11 @@ jobs:
         run: python tracker.py
 
       - name: Save new price file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "autodoc-tracker-bot"
           git config --global user.email "tracker@example.com"
           git add last_price.txt
           git commit -m "Update last recorded price" || echo "No change"
-          git push
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY} HEAD:main
