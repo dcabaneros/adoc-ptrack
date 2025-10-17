@@ -13,7 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: true   # <-- important for git push
           fetch-depth: 0
 
       - name: Set up Python
@@ -32,9 +31,11 @@ jobs:
         run: python tracker.py
 
       - name: Save new price file
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git config --global user.name "autodoc-tracker-bot"
           git config --global user.email "tracker@example.com"
           git add last_price.txt
           git commit -m "Update last recorded price" || echo "No change"
-          git push
+          git push https://$PAT_TOKEN@github.com/${{ github.repository }} HEAD:main
