@@ -10,7 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true   # <-- important for git push
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,11 +32,9 @@ jobs:
         run: python tracker.py
 
       - name: Save new price file
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "autodoc-tracker-bot"
           git config --global user.email "tracker@example.com"
           git add last_price.txt
           git commit -m "Update last recorded price" || echo "No change"
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY} HEAD:main
+          git push
