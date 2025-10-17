@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 # ---- Configuration ----
-PRODUCT_URL = "https://www.autodoc.es/product-link-here"  # ← replace with your real URL
+PRODUCT_URL = "https://www.autodoc.es/lemforder/1272015"  # ← replace with your real URL
 PRICE_FILE = Path("last_price.txt")
 
 # Emulate Autodoc Android app headers
