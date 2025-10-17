@@ -1,0 +1,36 @@
+name: Autodoc Price Tracker (Android Headers)
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # every hour
+  workflow_dispatch:
+
+jobs:
+  track-price:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tracker script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python tracker.py
+
+      - name: Save new price file
+        run: |
+          git config --global user.name "autodoc-tracker-bot"
+          git config --global user.email "tracker@example.com"
+          git add last_price.txt
+          git commit -m "Update last recorded price" || echo "No change"
+          git push
