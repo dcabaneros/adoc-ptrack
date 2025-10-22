@@ -10,11 +10,15 @@ import os
 PRODUCT_URL = "https://www.autodoc.es/lemforder/1272015"
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 12; Pixel 6 Pro) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Mobile Safari/537.36"
+        "AUTODOC/3.4.0 (iPhone; iOS 17.0; Scale/3.00)"
     ),
-    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.autodoc.es/",
+    "Connection": "keep-alive",
+    "x-ios-bundle-identifier": "com.autodoc.app",
+    "x-ios-version": "3.4.0",
 }
 PRICE_FILE = "last_price.txt"
 
