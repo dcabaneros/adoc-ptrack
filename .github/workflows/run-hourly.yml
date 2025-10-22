@@ -25,9 +25,9 @@ jobs:
 
       - name: Run price tracker
         env:
-          GMAIL_USER: ${{ secrets.EMAIL_USER }}
-          GMAIL_APP_PASS: ${{ secrets.EMAIL_PASS }}
-          ALERT_RECEIVER: ${{ secrets.EMAIL_TO }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: |
           python tracker.py
 
