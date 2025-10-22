@@ -11,7 +11,10 @@ from email.mime.multipart import MIMEMultipart
 
 # === CONFIG ===
 URL = "https://www.autodoc.es/lemforder/1272015"
-PRICE_FILE = "price_history.txt"
+# Absolute path to the repo root
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+PRICE_FILE = os.path.join(REPO_DIR, "price_history.txt")
+
 
 # Gmail credentials
 SENDER_EMAIL = os.getenv("EMAIL_USER")
@@ -137,6 +140,7 @@ def main():
     else:
         print("🆕 First recorded price.")
 
+    print(f"Saving price {current_price} to {PRICE_FILE}")
     save_price(current_price)
     print("✅ Price history updated.")
 
