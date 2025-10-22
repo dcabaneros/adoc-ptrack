@@ -5,6 +5,7 @@ import gzip
 from io import BytesIO
 import os
 from datetime import datetime
+import pytz
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -37,6 +38,7 @@ HEADERS = {
     "Referer": "https://www.autodoc.es/",
 }
 
+MADRID_TZ = pytz.timezone("Europe/Madrid")
 
 # === FETCH HTML ===
 def fetch_html(url):
@@ -102,8 +104,8 @@ def load_last_price(product_name):
 
 
 def save_price(product_name, price):
-    """Append product price to history file."""
-    timestamp = datetime.now().isoformat()
+    """Append product price to history file with Madrid timezone, human-readable."""
+    timestamp = datetime.now(MADRID_TZ).strftime("%d/%m/%Y %H:%M:%S")  # e.g., 22/10/2025 14:35:00
     try:
         with open(PRICE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{timestamp} | {product_name} | {price}\n")
