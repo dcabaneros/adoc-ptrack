@@ -15,9 +15,9 @@ URL = "https://www.autodoc.es/lemforder/1272015"
 PRICE_FILE = "price_history.json"
 
 # Gmail sender info
-SENDER_EMAIL = os.getenv("GMAIL_USER")      # e.g. youraddress@gmail.com
-SENDER_PASS = os.getenv("GMAIL_APP_PASS")   # use an App Password, not your main one
-RECEIVER_EMAIL = os.getenv("ALERT_RECEIVER") or SENDER_EMAIL
+SENDER_EMAIL = os.getenv("EMAIL_USER")      # e.g. youraddress@gmail.com
+SENDER_PASS = os.getenv("EMAIL_PASS")   # use an App Password, not your main one
+RECEIVER_EMAIL = os.getenv("EMAIL_TO") or SENDER_EMAIL
 
 # iOS Autodoc app headers
 HEADERS = {
