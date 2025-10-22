@@ -3,92 +3,120 @@ from bs4 import BeautifulSoup
 import smtplib
 from email.mime.text import MIMEText
 import os
-from datetime import datetime
-from pathlib import Path
-import re
 
-# ---- Configuration ----
-PRODUCT_URL = "https://www.autodoc.es/lemforder/1272015"  # Replace with your product URL
-PRICE_FILE = Path("last_price.txt")
-
-# Emulate Autodoc Android app headers
+# -------------------
+# CONFIGURATION
+# -------------------
+PRODUCT_URL = "https://www.autodoc.es/lemforder/1272015"
 HEADERS = {
     "User-Agent": (
-        "Autodoc/5.34.0 (Android 13; Mobile; rv:113.0) "
-        "Gecko/113.0 Firefox/113.0 AutodocApp/5.34.0"
+        "Mozilla/5.0 (Linux; Android 12; Pixel 6 Pro) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Mobile Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
 }
+PRICE_FILE = "last_price.txt"
 
-# ---- Email function ----
-def send_email(subject, body):
-    sender = os.environ["EMAIL_USER"]
-    password = os.environ["EMAIL_PASS"]
-    recipient = os.environ["EMAIL_TO"]
 
-    msg = MIMEText(body)
-    msg["From"] = sender
-    msg["To"] = recipient
-    msg["Subject"] = subject
+# -------------------
+# HELPER FUNCTIONS
+# -------------------
+def fetch_html(url):
+    print(f"Fetching {url} with Android headers...")
+    response = requests.get(url, headers=HEADERS, timeout=15)
+    response.raise_for_status()
+    return response.text
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(sender, password)
-        server.send_message(msg)
 
-    print("📧 Email sent successfully.")
-
-# ---- Price scraper ----
-def get_current_price():
-    print(f"Fetching {PRODUCT_URL} with Android headers...")
-    resp = requests.get(PRODUCT_URL, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    price_container = soup.find("div", class_="product-block__price-new-wrap")
-
-    if not price_container:
+def parse_price(html):
+    soup = BeautifulSoup(html, "html.parser")
+    price_tag = soup.find("div", class_="product-block__price-new-wrap")
+    if not price_tag:
         raise ValueError("❌ Could not find price element on the page")
 
-    # Extract numeric price
-    text = price_container.get_text(strip=True)
-    match = re.search(r"(\d+[.,]?\d*)", text)
-    if not match:
-        raise ValueError("❌ Could not parse price from the text")
+    # Extract text and clean it
+    price_text = price_tag.get_text(strip=True)
+    # Remove € symbol and convert to float
+    price_value = float(price_text.replace("€", "").replace(",", ".").strip())
+    return price_value
 
-    price = float(match.group(1).replace(",", "."))
-    return price
 
-# ---- Main logic ----
+def load_price_history():
+    if not os.path.exists(PRICE_FILE):
+        return []
+    with open(PRICE_FILE, "r", encoding="utf-8") as f:
+        lines = [float(line.strip()) for line in f if line.strip()]
+    return lines
+
+
+def save_price_history(history):
+    with open(PRICE_FILE, "w", encoding="utf-8") as f:
+        for price in history:
+            f.write(f"{price}\n")
+
+
+def send_email_notification(current_price, previous_price):
+    user = os.getenv("EMAIL_USER")
+    password = os.getenv("EMAIL_PASS")
+    to_email = os.getenv("EMAIL_TO")
+
+    if not user or not password or not to_email:
+        print("⚠️ Email credentials not provided. Skipping email notification.")
+        return
+
+    subject = "📉 Price Drop Alert on Autodoc!"
+    body = (
+        f"The price of your tracked product has dropped!\n\n"
+        f"Previous price: {previous_price:.2f} €\n"
+        f"New price: {current_price:.2f} €\n\n"
+        f"Product link: {PRODUCT_URL}"
+    )
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = to_email
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(user, password)
+            server.send_message(msg)
+        print("✅ Email sent successfully.")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+
+
+# -------------------
+# MAIN LOGIC
+# -------------------
 def main():
-    current_price = get_current_price()
-    print(f"Current price: €{current_price}")
+    html = fetch_html(PRODUCT_URL)
+    current_price = parse_price(html)
+    print(f"💶 Current price: {current_price:.2f} €")
 
-    last_price = None
-    if PRICE_FILE.exists():
-        last_price = float(PRICE_FILE.read_text().strip())
-        print(f"Last recorded price: €{last_price}")
+    price_history = load_price_history()
+    if price_history:
+        previous_price = price_history[-1]
+        print(f"📊 Last recorded price: {previous_price:.2f} €")
 
-    PRICE_FILE.write_text(str(current_price))
-
-    if last_price is not None and current_price < last_price:
-        diff = last_price - current_price
-        subject = f"🔻 Price drop detected! Now €{current_price:.2f} (-{diff:.2f}€)"
-        body = f"""
-The price of your tracked Autodoc product has dropped!
-
-URL: {PRODUCT_URL}
-Old price: €{last_price:.2f}
-New price: €{current_price:.2f}
-Drop: €{diff:.2f}
-
-Time (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-        send_email(subject, body)
+        if current_price < previous_price:
+            print("📉 Price dropped!")
+            send_email_notification(current_price, previous_price)
+        elif current_price > previous_price:
+            print("📈 Price increased.")
+        else:
+            print("➡️ Price unchanged.")
     else:
-        print("No price drop detected.")
+        print("🆕 No previous price recorded — initializing history.")
+
+    # Append new price to history (keep only last 50 entries)
+    price_history.append(current_price)
+    price_history = price_history[-50:]
+    save_price_history(price_history)
+    print("💾 Price history updated.")
+
 
 if __name__ == "__main__":
     main()
