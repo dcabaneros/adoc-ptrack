@@ -97,6 +97,7 @@ def send_email_notification(current_price, previous_price):
 # -------------------
 def main():
     html = fetch_html(PRODUCT_URL)
+    print("🔍 HTML snippet received:\n", html[:500])
     current_price = parse_price(html)
     print(f"💶 Current price: {current_price:.2f} €")
 
