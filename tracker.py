@@ -1,126 +1,113 @@
 import requests
 from bs4 import BeautifulSoup
-import smtplib
-from email.mime.text import MIMEText
+import brotli
+import gzip
+from io import BytesIO
 import os
+import json
+from datetime import datetime
 
-# -------------------
-# CONFIGURATION
-# -------------------
-PRODUCT_URL = "https://www.autodoc.es/lemforder/1272015"
+URL = "https://www.autodoc.es/lemforder/1272015"
+PRICE_FILE = "price_history.json"
+
+# Simulate an iPhone/iOS Autodoc app request
 HEADERS = {
-    "User-Agent": (
-        "AUTODOC/3.4.0 (iPhone; iOS 17.0; Scale/3.00)"
-    ),
+    "User-Agent": "Autodoc/2.6.1 (iPhone; iOS 17.5; Scale/3.00)",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
     "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.autodoc.es/",
     "Connection": "keep-alive",
-    "x-ios-bundle-identifier": "com.autodoc.app",
-    "x-ios-version": "3.4.0",
+    "Referer": "https://www.autodoc.es/",
 }
-PRICE_FILE = "last_price.txt"
 
 
-# -------------------
-# HELPER FUNCTIONS
-# -------------------
 def fetch_html(url):
-    print(f"Fetching {url} with Android headers...")
+    """Fetch page HTML with Brotli/gzip decoding."""
+    print(f"Fetching {url} with iOS headers...")
     response = requests.get(url, headers=HEADERS, timeout=15)
     response.raise_for_status()
-    return response.text
+
+    encoding = response.headers.get("Content-Encoding", "")
+    if "br" in encoding:
+        html = brotli.decompress(response.content).decode("utf-8", errors="ignore")
+    elif "gzip" in encoding:
+        buf = BytesIO(response.content)
+        with gzip.GzipFile(fileobj=buf) as f:
+            html = f.read().decode("utf-8", errors="ignore")
+    else:
+        html = response.text
+
+    return html
 
 
 def parse_price(html):
+    """Extract current price from the HTML."""
     soup = BeautifulSoup(html, "html.parser")
-    price_tag = soup.find("div", class_="product-block__price-new-wrap")
-    if not price_tag:
-        raise ValueError("❌ Could not find price element on the page")
+    selectors = [
+        "div.product-block__price-new-wrap",
+        "span.product-block__price",
+        "div.product-price",
+    ]
 
-    # Extract text and clean it
-    price_text = price_tag.get_text(strip=True)
-    # Remove € symbol and convert to float
-    price_value = float(price_text.replace("€", "").replace(",", ".").strip())
-    return price_value
+    for sel in selectors:
+        el = soup.select_one(sel)
+        if el and el.get_text(strip=True):
+            text = el.get_text(strip=True)
+            text = text.replace("€", "").replace(",", ".").split()[0]
+            try:
+                return float(text)
+            except ValueError:
+                continue
+
+    print("🔍 HTML snippet (first 400 chars):")
+    print(html[:400])
+    raise ValueError("❌ Could not find price element on the page")
 
 
-def load_price_history():
-    if not os.path.exists(PRICE_FILE):
-        return []
-    with open(PRICE_FILE, "r", encoding="utf-8") as f:
-        lines = [float(line.strip()) for line in f if line.strip()]
-    return lines
+def load_last_price():
+    """Load last stored price."""
+    if os.path.exists(PRICE_FILE):
+        with open(PRICE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if data and isinstance(data, list):
+                return data[-1]["price"]
+    return None
 
 
-def save_price_history(history):
+def save_price(price):
+    """Save new price with timestamp."""
+    data = []
+    if os.path.exists(PRICE_FILE):
+        with open(PRICE_FILE, "r", encoding="utf-8") as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = []
+
+    data.append({"timestamp": datetime.now().isoformat(), "price": price})
     with open(PRICE_FILE, "w", encoding="utf-8") as f:
-        for price in history:
-            f.write(f"{price}\n")
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def send_email_notification(current_price, previous_price):
-    user = os.getenv("EMAIL_USER")
-    password = os.getenv("EMAIL_PASS")
-    to_email = os.getenv("EMAIL_TO")
-
-    if not user or not password or not to_email:
-        print("⚠️ Email credentials not provided. Skipping email notification.")
-        return
-
-    subject = "📉 Price Drop Alert on Autodoc!"
-    body = (
-        f"The price of your tracked product has dropped!\n\n"
-        f"Previous price: {previous_price:.2f} €\n"
-        f"New price: {current_price:.2f} €\n\n"
-        f"Product link: {PRODUCT_URL}"
-    )
-
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = user
-    msg["To"] = to_email
-
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(user, password)
-            server.send_message(msg)
-        print("✅ Email sent successfully.")
-    except Exception as e:
-        print(f"❌ Failed to send email: {e}")
-
-
-# -------------------
-# MAIN LOGIC
-# -------------------
 def main():
-    html = fetch_html(PRODUCT_URL)
-    print("🔍 HTML snippet received:\n", html[:500])
+    html = fetch_html(URL)
     current_price = parse_price(html)
-    print(f"💶 Current price: {current_price:.2f} €")
+    last_price = load_last_price()
 
-    price_history = load_price_history()
-    if price_history:
-        previous_price = price_history[-1]
-        print(f"📊 Last recorded price: {previous_price:.2f} €")
+    print(f"💰 Current price: {current_price} €")
+    if last_price is not None:
+        print(f"📈 Last recorded price: {last_price} €")
 
-        if current_price < previous_price:
-            print("📉 Price dropped!")
-            send_email_notification(current_price, previous_price)
-        elif current_price > previous_price:
-            print("📈 Price increased.")
+        if current_price < last_price:
+            print(f"📉 Price dropped! ↓ {last_price - current_price:.2f} €")
+        elif current_price > last_price:
+            print(f"📈 Price increased ↑ {current_price - last_price:.2f} €")
         else:
-            print("➡️ Price unchanged.")
+            print("➖ Price unchanged.")
     else:
-        print("🆕 No previous price recorded — initializing history.")
+        print("🆕 First recorded price.")
 
-    # Append new price to history (keep only last 50 entries)
-    price_history.append(current_price)
-    price_history = price_history[-50:]
-    save_price_history(price_history)
-    print("💾 Price history updated.")
+    save_price(current_price)
+    print("✅ Price history updated.")
 
 
 if __name__ == "__main__":
