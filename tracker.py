@@ -10,18 +10,23 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # === CONFIG ===
-URL = "https://www.autodoc.es/lemforder/1272015"
-# Absolute path to the repo root
-REPO_DIR = os.path.dirname(os.path.abspath(__file__))
-PRICE_FILE = os.path.join(REPO_DIR, "price_history.txt")
 
+# List of products to track
+PRODUCTS = [
+    {"name": "Lemforder 1272015", "url": "https://www.autodoc.es/lemforder/1272015"},
+    {"name": "Another Product", "url": "https://www.autodoc.es/someproduct/123456"},
+    # Add more products here
+]
 
-# Gmail credentials
+# Price history file (absolute path to avoid working directory issues)
+PRICE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "price_history.txt")
+
+# Gmail credentials (from GitHub Secrets)
 SENDER_EMAIL = os.getenv("EMAIL_USER")
 SENDER_PASS = os.getenv("EMAIL_PASS")
 RECEIVER_EMAIL = os.getenv("EMAIL_TO") or SENDER_EMAIL
 
-# iOS headers
+# iOS Autodoc app headers
 HEADERS = {
     "User-Agent": "Autodoc/2.6.1 (iPhone; iOS 17.5; Scale/3.00)",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -29,6 +34,7 @@ HEADERS = {
     "Connection": "keep-alive",
     "Referer": "https://www.autodoc.es/",
 }
+
 
 # === FETCH HTML ===
 def fetch_html(url):
@@ -54,6 +60,7 @@ def fetch_html(url):
 
     return html
 
+
 # === PARSE PRICE ===
 def parse_price(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -75,27 +82,33 @@ def parse_price(html):
     print(html[:400])
     raise ValueError("❌ Could not find price element on the page")
 
+
 # === PRICE HISTORY ===
-def load_last_price():
-    """Return the last recorded price from price_history.txt"""
+def load_last_price(product_name):
+    """Return last recorded price for a product."""
     if os.path.exists(PRICE_FILE):
         with open(PRICE_FILE, "r", encoding="utf-8") as f:
             lines = [line.strip() for line in f if line.strip()]
-            if lines:
-                try:
-                    return float(lines[-1])
-                except ValueError:
-                    pass
+            for line in reversed(lines):
+                parts = line.split("|")
+                if len(parts) == 3 and parts[1].strip() == product_name:
+                    try:
+                        return float(parts[2].strip())
+                    except ValueError:
+                        continue
     return None
 
-def save_price(price):
-    """Append new price to history file"""
+
+def save_price(product_name, price):
+    """Append product price to history file."""
+    timestamp = datetime.now().isoformat()
     try:
         with open(PRICE_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{price}\n")
-        print(f"✅ Saved {price} to {PRICE_FILE}")
+            f.write(f"{timestamp} | {product_name} | {price}\n")
+        print(f"✅ Saved {product_name} price {price} to {PRICE_FILE}")
     except Exception as e:
         print(f"⚠️ Failed to write history: {e}")
+
 
 # === EMAIL ALERT ===
 def send_email(subject, body):
@@ -118,30 +131,42 @@ def send_email(subject, body):
     except Exception as e:
         print(f"⚠️ Email sending failed: {e}")
 
+
 # === MAIN ===
 def main():
-    html = fetch_html(URL)
-    current_price = parse_price(html)
-    last_price = load_last_price()
+    for product in PRODUCTS:
+        name = product["name"]
+        url = product["url"]
 
-    print(f"💰 Current price: {current_price} €")
-    if last_price is not None:
-        print(f"📈 Last recorded price: {last_price} €")
-        diff = current_price - last_price
-        if diff < 0:
-            print(f"📉 Price dropped ↓ {abs(diff):.2f} €")
-            subject = "📉 Autodoc Price Drop Alert"
-            body = f"Price dropped from {last_price} € to {current_price} €!\n\n{URL}"
-            send_email(subject, body)
-        elif diff > 0:
-            print(f"📈 Price increased ↑ {diff:.2f} €")
+        print(f"\n🔎 Checking {name}...")
+        try:
+            html = fetch_html(url)
+            current_price = parse_price(html)
+        except Exception as e:
+            print(f"⚠️ Failed to fetch/parse {name}: {e}")
+            continue
+
+        last_price = load_last_price(name)
+        print(f"{name}: Current {current_price} €, Last {last_price if last_price is not None else 'N/A'} €")
+
+        if last_price is not None:
+            diff = current_price - last_price
+            if diff < 0:
+                print(f"📉 Price dropped ↓ {abs(diff):.2f} €")
+                subject = f"📉 Price Drop Alert: {name}"
+                body = f"{name} dropped from {last_price} € to {current_price} €!\n\n{url}"
+                send_email(subject, body)
+            elif diff > 0:
+                print(f"📈 Price increased ↑ {diff:.2f} €")
+            else:
+                print("➖ Price unchanged.")
         else:
-            print("➖ Price unchanged.")
-    else:
-        print("🆕 First recorded price.")
+            print("🆕 First recorded price.")
 
-    save_price(current_price)
-    print("✅ Price history updated.")
+        save_price(name, current_price)
+
+    print("\n✅ All products checked.")
+
 
 if __name__ == "__main__":
     main()
