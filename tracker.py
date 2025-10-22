@@ -18,7 +18,7 @@ SENDER_EMAIL = os.getenv("EMAIL_USER")
 SENDER_PASS = os.getenv("EMAIL_PASS")
 RECEIVER_EMAIL = os.getenv("EMAIL_TO") or SENDER_EMAIL
 
-# iOS Autodoc app headers
+# iOS headers
 HEADERS = {
     "User-Agent": "Autodoc/2.6.1 (iPhone; iOS 17.5; Scale/3.00)",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -73,23 +73,26 @@ def parse_price(html):
     raise ValueError("❌ Could not find price element on the page")
 
 # === PRICE HISTORY ===
-def load_price_history():
-    """Return list of previous prices from txt file."""
+def load_last_price():
+    """Return the last recorded price from price_history.txt"""
     if os.path.exists(PRICE_FILE):
         with open(PRICE_FILE, "r", encoding="utf-8") as f:
-            prices = []
-            for line in f:
+            lines = [line.strip() for line in f if line.strip()]
+            if lines:
                 try:
-                    prices.append(float(line.strip()))
+                    return float(lines[-1])
                 except ValueError:
-                    continue
-            return prices
-    return []
+                    pass
+    return None
 
 def save_price(price):
-    """Append new price to history file."""
-    with open(PRICE_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{price}\n")
+    """Append new price to history file"""
+    try:
+        with open(PRICE_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{price}\n")
+        print(f"✅ Saved {price} to {PRICE_FILE}")
+    except Exception as e:
+        print(f"⚠️ Failed to write history: {e}")
 
 # === EMAIL ALERT ===
 def send_email(subject, body):
@@ -116,8 +119,7 @@ def send_email(subject, body):
 def main():
     html = fetch_html(URL)
     current_price = parse_price(html)
-    history = load_price_history()
-    last_price = history[-1] if history else None
+    last_price = load_last_price()
 
     print(f"💰 Current price: {current_price} €")
     if last_price is not None:
