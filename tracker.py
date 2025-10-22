@@ -4,7 +4,6 @@ import brotli
 import gzip
 from io import BytesIO
 import os
-import json
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
@@ -12,11 +11,11 @@ from email.mime.multipart import MIMEMultipart
 
 # === CONFIG ===
 URL = "https://www.autodoc.es/lemforder/1272015"
-PRICE_FILE = "price_history.json"
+PRICE_FILE = "price_history.txt"
 
-# Gmail sender info
-SENDER_EMAIL = os.getenv("EMAIL_USER")      # e.g. youraddress@gmail.com
-SENDER_PASS = os.getenv("EMAIL_PASS")   # use an App Password, not your main one
+# Gmail credentials
+SENDER_EMAIL = os.getenv("EMAIL_USER")
+SENDER_PASS = os.getenv("EMAIL_PASS")
 RECEIVER_EMAIL = os.getenv("EMAIL_TO") or SENDER_EMAIL
 
 # iOS Autodoc app headers
@@ -28,11 +27,8 @@ HEADERS = {
     "Referer": "https://www.autodoc.es/",
 }
 
-
-# === FETCHING ===
+# === FETCH HTML ===
 def fetch_html(url):
-    """Fetch page HTML with Brotli/gzip decoding."""
-    print(f"Fetching {url} with iOS headers...")
     response = requests.get(url, headers=HEADERS, timeout=15)
     response.raise_for_status()
     encoding = response.headers.get("Content-Encoding", "")
@@ -43,7 +39,6 @@ def fetch_html(url):
             try:
                 html = brotli.decompress(content).decode("utf-8", errors="ignore")
             except brotli.error:
-                print("⚠️ Brotli decompression failed — using plain text.")
                 html = content.decode("utf-8", errors="ignore")
         elif "gzip" in encoding:
             buf = BytesIO(content)
@@ -51,16 +46,13 @@ def fetch_html(url):
                 html = f.read().decode("utf-8", errors="ignore")
         else:
             html = response.text
-    except Exception as e:
-        print(f"⚠️ Decompression failed: {e}. Falling back to raw text.")
+    except Exception:
         html = response.text
 
     return html
 
-
-# === PARSING ===
+# === PARSE PRICE ===
 def parse_price(html):
-    """Extract the product price from HTML."""
     soup = BeautifulSoup(html, "html.parser")
     selectors = [
         "div.product-block__price-new-wrap",
@@ -80,38 +72,27 @@ def parse_price(html):
     print(html[:400])
     raise ValueError("❌ Could not find price element on the page")
 
-
-# === STORAGE ===
-def load_last_price():
-    """Load last price from local JSON file."""
+# === PRICE HISTORY ===
+def load_price_history():
+    """Return list of previous prices from txt file."""
     if os.path.exists(PRICE_FILE):
         with open(PRICE_FILE, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-                if data:
-                    return data[-1]["price"]
-            except json.JSONDecodeError:
-                pass
-    return None
-
+            prices = []
+            for line in f:
+                try:
+                    prices.append(float(line.strip()))
+                except ValueError:
+                    continue
+            return prices
+    return []
 
 def save_price(price):
-    """Save new price record."""
-    data = []
-    if os.path.exists(PRICE_FILE):
-        with open(PRICE_FILE, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-            except json.JSONDecodeError:
-                pass
-    data.append({"timestamp": datetime.now().isoformat(), "price": price})
-    with open(PRICE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    """Append new price to history file."""
+    with open(PRICE_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{price}\n")
 
-
-# === EMAIL ALERTS ===
+# === EMAIL ALERT ===
 def send_email(subject, body):
-    """Send email alert through Gmail."""
     if not SENDER_EMAIL or not SENDER_PASS:
         print("⚠️ Missing Gmail credentials. Skipping email alert.")
         return
@@ -131,19 +112,17 @@ def send_email(subject, body):
     except Exception as e:
         print(f"⚠️ Email sending failed: {e}")
 
-
 # === MAIN ===
 def main():
     html = fetch_html(URL)
     current_price = parse_price(html)
-    last_price = load_last_price()
+    history = load_price_history()
+    last_price = history[-1] if history else None
 
     print(f"💰 Current price: {current_price} €")
-
     if last_price is not None:
         print(f"📈 Last recorded price: {last_price} €")
         diff = current_price - last_price
-
         if diff < 0:
             print(f"📉 Price dropped ↓ {abs(diff):.2f} €")
             subject = "📉 Autodoc Price Drop Alert"
@@ -158,7 +137,6 @@ def main():
 
     save_price(current_price)
     print("✅ Price history updated.")
-
 
 if __name__ == "__main__":
     main()
