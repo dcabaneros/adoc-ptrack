@@ -1,4 +1,4 @@
-requests==2.34.0
-beautifulsoup4==4.12.2
-brotli==1.0.9
-pytz==2025.7
+requests
+beautifulsoup4
+brotli
+pytz
