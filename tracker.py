@@ -140,7 +140,6 @@ def main():
     else:
         print("🆕 First recorded price.")
 
-    print(f"Saving price {current_price} to {PRICE_FILE}")
     save_price(current_price)
     print("✅ Price history updated.")
 
