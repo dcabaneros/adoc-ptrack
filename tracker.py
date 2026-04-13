@@ -14,10 +14,7 @@ from email.mime.multipart import MIMEMultipart
 
 # List of products to track
 PRODUCTS = [
-    {"name": "Lemforder 3387501", "url": "https://www.autodoc.es/lemforder/1272015"},
-    {"name": "Lemforder 3557301", "url": "https://www.autodoc.es/lemforder/1273493"},
-    {"name": "Lemforder 3557401", "url": "https://www.autodoc.es/lemforder/1273494"},
-    {"name": "HITACHI 2502195", "url": "https://www.autodoc.es/hitachi/13965133"},
+    {"name": "LEMFÖRDER LMR772N0080", "url": "https://www.autodoc.es/lemforder/26116966"},
     # Add more products here
 ]
 
