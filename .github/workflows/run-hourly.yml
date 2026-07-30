@@ -1,9 +1,9 @@
 name: Autodoc Price Tracker
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # every hour
-  workflow_dispatch:       # allows manual trigger
+#  schedule:
+#    - cron: '0 * * * *'  # every hour
+#  workflow_dispatch:       # allows manual trigger
 
 jobs:
   track-price:
